@@ -146,7 +146,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     }
     else
     {
-        BufDesc curFrame = bufTable[framePtr];
+        BufDesc &curFrame = bufTable[framePtr];
         curFrame.refbit = !curFrame.refbit;
         curFrame.pinCnt++;
         page = &bufPool[framePtr];
@@ -157,6 +157,22 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
 const Status BufMgr::unPinPage(File *file, const int PageNo,
                                const bool dirty)
 {
+    int framePtr = 0;
+    Status pageStatus = hashTable->lookup(file, PageNo, framePtr);
+
+    if (pageStatus != OK)
+    {
+        return HASHNOTFOUND;
+    }
+
+    BufDesc &curFrame = bufTable[framePtr];
+    if (curFrame.pinCnt > 0)
+    {
+        curFrame.pinCnt--;
+        curFrame.dirty = curFrame.dirty | dirty;
+        return OK;
+    }
+    return PAGENOTPINNED;
 }
 
 const Status BufMgr::allocPage(File *file, int &pageNo, Page *&page)
