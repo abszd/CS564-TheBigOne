@@ -107,7 +107,7 @@ const Status BufMgr::allocBuf(int &frame)
             Status removeStatus = hashTable->remove(curBuf->file, curBuf->pageNo);
             if (removeStatus != OK)
             {
-                return HASHTBLERROR;
+                return removeStatus;
             }
         }
         frame = clockHand;
@@ -148,7 +148,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     else
     {
         BufDesc &curFrame = bufTable[framePtr];
-        curFrame.refbit = true;
+        curFrame.refbit = !curFrame.refbit;
         curFrame.pinCnt++;
         page = &bufPool[framePtr];
         return OK;
