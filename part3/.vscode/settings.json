@@ -5,6 +5,7 @@
         "db.C": "cpp",
         "testbuf.C": "cpp",
         "error.C": "cpp",
-        "page.C": "cpp"
+        "page.C": "cpp",
+        "iostream": "cpp"
     }
 }

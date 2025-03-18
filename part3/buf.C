@@ -1,3 +1,8 @@
+// Arian Abbaszadeh - 9083678194
+// Glenn Hadcock -
+// Akshaya Somasundaram -
+// Sets up the buffer manager class and functions to interact with the buffer manager
+
 #include <memory.h>
 #include <unistd.h>
 #include <errno.h>
@@ -70,89 +75,83 @@ BufMgr::~BufMgr()
 const Status BufMgr::allocBuf(int &frame)
 {
     int checked = 0;
-    while (checked < numBufs)
+    // if we've checked all frames twice to allow for the reference bit then we're at capacity and checked is being incremented here
+    while (checked++ < numBufs * 2)
     {
         advanceClock();
-        BufDesc *curBuf = &bufTable[clockHand];
+        BufDesc *curBuf = &bufTable[clockHand]; // current frame we're checking
 
-        if (!curBuf->valid)
+        if (!curBuf->valid) // if we have an invalid frame we can just allocoate
         {
             frame = clockHand;
+            curBuf->Clear();
             return OK;
         }
 
-        checked++;
-        if (curBuf->refbit)
+        if (curBuf->refbit) // if the refbit is 1 set to 0
         {
             curBuf->refbit = false;
             continue;
         }
 
-        if (curBuf->pinCnt > 0)
+        if (curBuf->pinCnt > 0) // try next frame if frame is pinned
         {
             continue;
         }
 
-        if (curBuf->dirty)
+        if (curBuf->dirty) // if weve modified the page flush changes
         {
-            Status writeStatus = curBuf->file->writePage(curBuf->pageNo, &bufPool[clockHand]);
-            if (writeStatus != OK)
+            if (curBuf->file->writePage(curBuf->pageNo, &bufPool[clockHand]) != OK)
             {
                 return UNIXERR;
             }
         }
 
-        if (curBuf->valid)
+        if (curBuf->valid) // Safety check for validity
         {
-            Status removeStatus = hashTable->remove(curBuf->file, curBuf->pageNo);
-            if (removeStatus != OK)
+            if (hashTable->remove(curBuf->file, curBuf->pageNo) != OK) // Then remove from buffer
             {
-                return removeStatus;
+                return HASHTBLERROR;
             }
         }
+        // Set frame ptr and clear other variables
         frame = clockHand;
         curBuf->Clear();
         return OK;
     }
-    return BUFFEREXCEEDED;
+    return BUFFEREXCEEDED; // If we reach this weve tried every frame and allowed for the reference bit to switch
 }
 
 const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
 {
     int framePtr = 0;
-    Status pageStatus = hashTable->lookup(file, PageNo, framePtr);
-
-    if (pageStatus == HASHNOTFOUND)
+    if (hashTable->lookup(file, PageNo, framePtr) == HASHNOTFOUND) // if the page isn't found we need to allocate a new page
     {
-        Status allocStatus = allocBuf(framePtr);
+        Status allocStatus = allocBuf(framePtr); // allocate a frame for this page
         if (allocStatus != OK)
         {
             return allocStatus;
         }
-        Status readStatus = file->readPage(PageNo, &bufPool[framePtr]);
-        if (readStatus != OK)
+        if (file->readPage(PageNo, &bufPool[framePtr]) != OK) // Read it from disk
         {
             return UNIXERR;
         }
-
-        Status hashInsertStatus = hashTable->insert(file, PageNo, framePtr);
-        if (hashInsertStatus != OK)
+        if (hashTable->insert(file, PageNo, framePtr) != OK) // Insert the page into the buffer pool
         {
             return HASHTBLERROR;
         }
+        // Set the new frame up
         bufTable[framePtr].Set(file, PageNo);
-
-        page = &bufPool[framePtr];
-        return OK;
     }
-    else
+    else // Otherwise, we can just increment the pincount for the frame with the page in it
     {
         BufDesc &curFrame = bufTable[framePtr];
-        curFrame.refbit = !curFrame.refbit;
+        curFrame.refbit = !curFrame.refbit; // Also change the refernce bit
         curFrame.pinCnt++;
-        page = &bufPool[framePtr];
-        return OK;
     }
+    // Set the page pointer
+    page = &bufPool[framePtr];
+    return OK;
 }
 
 const Status BufMgr::unPinPage(File *file, const int PageNo,
@@ -161,7 +160,7 @@ const Status BufMgr::unPinPage(File *file, const int PageNo,
     int framePtr = 0;
     Status pageStatus = hashTable->lookup(file, PageNo, framePtr);
 
-    if (pageStatus != OK)
+    if (pageStatus != OK) // can't find it
     {
         return HASHNOTFOUND;
     }
@@ -169,32 +168,32 @@ const Status BufMgr::unPinPage(File *file, const int PageNo,
     BufDesc &curFrame = bufTable[framePtr];
     if (curFrame.pinCnt > 0)
     {
+        // updat the pincount and dirty bit
         curFrame.pinCnt--;
         curFrame.dirty = curFrame.dirty | dirty;
         return OK;
     }
-    return PAGENOTPINNED;
+    return PAGENOTPINNED; // We don't want to increment the count if its not pinned, this could cause allocation issues
 }
 
 const Status BufMgr::allocPage(File *file, int &pageNo, Page *&page)
 {
-    Status pageAllocStatus = file->allocatePage(pageNo);
-    if (pageAllocStatus != OK)
+    if (file->allocatePage(pageNo) != OK) // Make the page
     {
         return UNIXERR;
     }
     int framePtr = 0;
-    Status allocBufStatus = allocBuf(framePtr);
+    Status allocBufStatus = allocBuf(framePtr); // We find an open spot for it in the buffer pool
     if (allocBufStatus != OK)
     {
         return allocBufStatus;
     }
 
-    Status hashInsertStatus = hashTable->insert(file, pageNo, framePtr);
-    if (hashInsertStatus != OK)
+    if (hashTable->insert(file, pageNo, framePtr) != OK) // Insert into the pool
     {
         return HASHTBLERROR;
     }
+    // Set up the frame and set page pointer
     bufTable[framePtr].Set(file, pageNo);
     page = &bufPool[framePtr];
     return OK;
