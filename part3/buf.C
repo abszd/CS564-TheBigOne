@@ -98,7 +98,7 @@ const Status BufMgr::allocBuf(int &frame)
             Status writeStatus = curBuf->file->writePage(curBuf->pageNo, &bufPool[clockHand]);
             if (writeStatus != OK)
             {
-                return writeStatus;
+                return UNIXERR;
             }
         }
 
@@ -107,10 +107,11 @@ const Status BufMgr::allocBuf(int &frame)
             Status removeStatus = hashTable->remove(curBuf->file, curBuf->pageNo);
             if (removeStatus != OK)
             {
-                return removeStatus;
+                return HASHTBLERROR;
             }
         }
         frame = clockHand;
+        curBuf->Clear();
         return OK;
     }
     return BUFFEREXCEEDED;
@@ -147,7 +148,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     else
     {
         BufDesc &curFrame = bufTable[framePtr];
-        curFrame.refbit = !curFrame.refbit;
+        curFrame.refbit = true;
         curFrame.pinCnt++;
         page = &bufPool[framePtr];
         return OK;
@@ -177,6 +178,26 @@ const Status BufMgr::unPinPage(File *file, const int PageNo,
 
 const Status BufMgr::allocPage(File *file, int &pageNo, Page *&page)
 {
+    Status pageAllocStatus = file->allocatePage(pageNo);
+    if (pageAllocStatus != OK)
+    {
+        return UNIXERR;
+    }
+    int framePtr = 0;
+    Status allocBufStatus = allocBuf(framePtr);
+    if (allocBufStatus != OK)
+    {
+        return allocBufStatus;
+    }
+
+    Status hashInsertStatus = hashTable->insert(file, pageNo, framePtr);
+    if (hashInsertStatus != OK)
+    {
+        return HASHTBLERROR;
+    }
+    bufTable[framePtr].Set(file, pageNo);
+    page = &bufPool[framePtr];
+    return OK;
 }
 
 const Status BufMgr::disposePage(File *file, const int pageNo)
