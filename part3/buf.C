@@ -163,7 +163,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     else // Otherwise, we can just increment the pincount for the frame with the page in it
     {
         BufDesc &curFrame = bufTable[framePtr];
-        curFrame.refbit = true;//!curFrame.refbit; // Also change the refernce bit
+        curFrame.refbit = true;//!curFrame.refbit; // Also change the reference bit
         curFrame.pinCnt++;
     }
     // Set the page pointer
