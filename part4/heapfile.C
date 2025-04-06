@@ -17,7 +17,22 @@ const Status createHeapFile(const string fileName)
     {
 		// file doesn't exist. First create it and allocate
 		// an empty header page and data page.
-		
+		// TODO: Implement
+		status = db.createFile(fileName);
+		status = db.openFile(fileName, file);
+		status = bufMgr->allocPage(filePtr, hdrPageNo, newPage);
+        hdrPage = (FileHdrPage*) newPage;
+        hdrPage->firstPage = -1;
+        hdrPage->lastPage = -1;
+        hdrPage->pageCnt = 1;
+        hdrPage->recCnt = 0;
+        status = bufMgr->allocPage(filePtr, newPageNo, newPage);
+        newPage->init(newPageNo);
+        hdrPage->firstPage = newPageNo;
+        hdrPage->lastPage = newPageNo;
+        hdrPage->pageCnt = hdrPage->pageCnt + 1;
+        bufMgr->unPinPage(filePtr, newPageNo, true);
+        bufMgr->unPinPage(filePtr, hdrPageNo, true);
 		
 		
 		
@@ -51,8 +66,20 @@ HeapFile::HeapFile(const string & fileName, Status& returnStatus)
     // open the file and read in the header page and the first data page
     if ((status = db.openFile(fileName, filePtr)) == OK)
     {
+		// TODO: Implement
+		// db->createFile(fileName);
+		// db->openFile(fileName, filePtr);
+		// db->readPage(filePtr, 0, pagePtr);
+		// headerPage = (FileHdrPage*) pagePtr;
+		// db->readPage(filePtr, 1, pagePtr);
+		// dataPage = (DataPage*) pagePtr;
 		
-		
+		status = bufMgr->readPage(filePtr, 0, pagePtr);
+		// headerPage = (FileHdrPage*) pagePtr;
+		// status = bufMgr->readPage(filePtr, 1, pagePtr);
+		// curPage = (DataPage*) pagePtr;
+		// curPageNo = 1;
+		// curDirtyFlag = false;
 		
 		
 		
@@ -357,6 +384,7 @@ const Status InsertFileScan::insertRecord(const Record & rec, RID& outRid)
         return INVALIDRECLEN;
     }
 
+    // TODO: Implement. Make it insert the record into the file!
   
   
   
@@ -365,7 +393,8 @@ const Status InsertFileScan::insertRecord(const Record & rec, RID& outRid)
   
   
   
-  
+    // Return the RID of the inserted record
+    // outRid = rid;
   
   
   
