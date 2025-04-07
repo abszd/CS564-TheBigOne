@@ -1,3 +1,7 @@
+// Arian Abbaszadeh - 9083678194
+// Glenn Hadcock - 9085633288
+// Akshaya Somasundaram - 9085417682
+// creates the heapfile class and functions to interact with it
 #include "heapfile.h"
 #include "error.h"
 
