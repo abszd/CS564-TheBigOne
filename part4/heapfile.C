@@ -1,7 +1,12 @@
 #include "heapfile.h"
 #include "error.h"
 
-// routine to create a heapfile
+/**
+ * @param fileName - name fo the file to be created
+ * @return status of the function
+ * Creates a file as long as it does not already exist, then create a header page and the first page in the file.
+ * Initialize both of these, unpin pages and mark as dirty
+ */
 const Status createHeapFile(const string fileName)
 {
     File *file;
@@ -38,7 +43,7 @@ const Status createHeapFile(const string fileName)
     }
 
     hdrPage = (FileHdrPage *)newPage;
-    strncpy(hdrPage->fileName, fileName.c_str(), MAXNAMESIZE);
+    strcpy(hdrPage->fileName, fileName.c_str());
     hdrPage->firstPage = -1;
     hdrPage->lastPage = -1;
     hdrPage->pageCnt = 0;
@@ -47,7 +52,6 @@ const Status createHeapFile(const string fileName)
     status = bufMgr->allocPage(file, newPageNo, newPage);
     if (status != OK)
     {
-        bufMgr->unPinPage(file, hdrPageNo, false);
         db.closeFile(file);
         return status;
     }
@@ -88,7 +92,10 @@ const Status destroyHeapFile(const string fileName)
     return (db.destroyFile(fileName));
 }
 
-// constructor opens the underlying file
+/**
+ * Constructor class
+ * Opens the file and fills in the header page and first data page
+ */
 HeapFile::HeapFile(const string &fileName, Status &returnStatus)
 {
     Status status;
@@ -96,7 +103,6 @@ HeapFile::HeapFile(const string &fileName, Status &returnStatus)
 
     cout << "opening file " << fileName << endl;
 
-    // open the file and read in the header page and the first data page
     if ((status = db.openFile(fileName, filePtr)) == OK)
     {
         status = filePtr->getFirstPage(headerPageNo);
@@ -333,13 +339,18 @@ const Status HeapFileScan::resetScan()
     return OK;
 }
 
+/**
+ * @return RID via outRid
+ * check the current page - if it's null read in the first page of the file
+ * then loop through the rest of the records, if we are at EOF attempt to change
+ * the page and continue looping through the records
+ */
 const Status HeapFileScan::scanNext(RID &outRid)
 {
     Status status = OK;
     RID nextRid;
     Record rec;
 
-    // Check for EOF before we start
     if (curPageNo == -1)
     {
         return FILEEOF;
@@ -591,7 +602,13 @@ InsertFileScan::~InsertFileScan()
     }
 }
 
-// Insert a record into the file
+/**
+ * @param rec
+ * @return RID via outRid
+ * if the current page is null, attempt to add the record to the last page, if the curpage is not the last page
+ * move it there. If there is not enough space on the current page we allocate a new one, allocate the record,
+ * and set it as the last page along with some initializtion.
+ */
 const Status InsertFileScan::insertRecord(const Record &rec, RID &outRid)
 {
     Page *newPage;
@@ -605,14 +622,18 @@ const Status InsertFileScan::insertRecord(const Record &rec, RID &outRid)
         return INVALIDRECLEN;
     }
 
-    if (curPage == NULL)
+    if (curPage == NULL || curPageNo != headerPage->lastPage)
     {
+        if (curPage != NULL)
+        {
+            status = bufMgr->unPinPage(filePtr, curPageNo, curDirtyFlag);
+            if (status != OK)
+                return status;
+        }
         curPageNo = headerPage->lastPage;
         status = bufMgr->readPage(filePtr, curPageNo, curPage);
         if (status != OK)
-        {
             return status;
-        }
         curDirtyFlag = false;
     }
 
@@ -627,7 +648,7 @@ const Status InsertFileScan::insertRecord(const Record &rec, RID &outRid)
         newPage->init(newPageNo);
 
         curPage->setNextPage(newPageNo);
-        newPage->setNextPage(-1); // New page is always the last page
+        newPage->setNextPage(-1);
 
         headerPage->lastPage = newPageNo;
         headerPage->pageCnt++;
