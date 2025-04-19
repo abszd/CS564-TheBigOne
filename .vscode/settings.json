@@ -5,6 +5,9 @@
     "testbuf.C": "cpp",
     "bufHash.C": "cpp",
     "error.C": "cpp",
-    "page.C": "cpp"
+    "page.C": "cpp",
+    "heapfile.C": "cpp",
+    "poals.C": "cpp",
+    "testfile.C": "cpp"
   }
 }
