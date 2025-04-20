@@ -1,61 +1,147 @@
+// #include "catalog.h"
+// #include "query.h"
+
+// /*
+//  * Deletes records from a specified relation.
+//  *
+//  * Returns:
+//  * 	OK on success
+//  * 	an error code otherwise
+//  */
+
+// const Status QU_Delete(const string &relation,
+// 					   const string &attrName,
+// 					   const Operator op,
+// 					   const Datatype type,
+// 					   const char *attrValue)
+// {
+// 	// part 6
+// 	Status status;
+// 	AttrDesc attrrec;
+
+// 	HeapFileScan *hfs = new HeapFileScan(relation, status);
+// 	status = attrCat->getInfo(relation, attrName, attrrec);
+// 	if (status)
+// 	{
+// 		return status;
+// 	}
+
+// 	float ffltr;
+// 	int ifltr;
+// 	char *fltr;
+// 	fltr = (char *)attrValue;
+// 	if (type == INTEGER)
+// 	{
+// 		ifltr = atoi(attrValue);
+// 		fltr = (char *)&ifltr;
+// 	}
+// 	else if (type == FLOAT)
+// 	{
+// 		ffltr = atof(attrValue);
+// 		fltr = (char *)&ffltr;
+// 	}
+// 	hfs->startScan(attrrec.attrOffset, attrrec.attrLen, type, fltr, op);
+
+// 	Record rec;
+// 	RID rid;
+// 	while (!(status = hfs->scanNext(rid)))
+// 	{
+// 		status = hfs->deleteRecord();
+// 		if (status)
+// 		{
+// 			return status;
+// 		}
+
+// 	}
+// 	if (status == FILEEOF)
+// 	{
+// 		status = OK;
+// 	}
+// 	hfs->endScan();
+// 	return status;
+// }
+
 #include "catalog.h"
 #include "query.h"
 
+
 /*
- * Deletes records from a specified relation.
+ * Delete all tuples in relation satisfying the specified predicate.
+ * <i>If no predicate given then delete all tuple for this relation.</i>
  *
- * Returns:
- * 	OK on success
- * 	an error code otherwise
+ * @param relation
+ * @param attrName
+ * @param op
+ * @param type
+ * @param attrValue
+ * @return: OK on success
+ * an error code otherwise
  */
 
-const Status QU_Delete(const string &relation,
-					   const string &attrName,
-					   const Operator op,
-					   const Datatype type,
-					   const char *attrValue)
+#include "stdio.h"
+#include "stdlib.h"
+const Status QU_Delete(const string & relation,
+		       const string & attrName,
+		       const Operator op,
+		       const Datatype type,
+		       const char *attrValue)
 {
-	// part 6
-	Status status;
-	AttrDesc attrrec;
+    Status status;
+    AttrDesc attrDesc;
+    const char* filter;
+    //keeps track of how many tuples will be deleted
+    int resultTupCnt = 0;
+    RID relRID;
+    HeapFileScan relScan(relation, status);
+    if (status != OK) { return status; }
+    //if no attrName given then delete all rows in relation
+    if(attrName.length() == 0){
+       
+       status = relScan.startScan(0, 0, STRING, NULL, EQ);
+       if (status != OK) { return status; }
+       
+       while (relScan.scanNext(relRID) == OK) {
+          status = relScan.deleteRecord();
+          if (status != OK) { return status; }
+              resultTupCnt++;
+       }
+       printf("deleted %d result tuples \n", resultTupCnt);
+       return OK;
+    }
+       
+    //gather info for the search
+    status = attrCat->getInfo(relation, attrName, attrDesc);
+    if (status != OK) { return status; }
 
-	HeapFileScan *hfs = new HeapFileScan(relation, status);
-	status = attrCat->getInfo(relation, attrName, attrrec);
-	if (status)
-	{
-		return status;
-	}
+    int tmpInt;
+    float tmpFloat;
+    //convert to proper data type
+    switch (type) {
+        case INTEGER:
+            tmpInt = atoi(attrValue);
+            filter = (char*)&tmpInt;
+            break;
+        case FLOAT:
+            tmpFloat = atof(attrValue);
+            filter = (char*)&tmpFloat;
+            break;
+        case STRING:
+            filter = attrValue;
+            break;
+    }
+    //with the book keeping finished, actually scan through the tuples
+    status = relScan.startScan(attrDesc.attrOffset, attrDesc.attrLen, type, filter, op);
+    if (status != OK) { return status; }
 
-	float ffltr;
-	int ifltr;
-	char *fltr;
-	fltr = (char *)attrValue;
-	if (type == INTEGER)
-	{
-		ifltr = atoi(attrValue);
-		fltr = (char *)&ifltr;
-	}
-	else if (type == FLOAT)
-	{
-		ffltr = atof(attrValue);
-		fltr = (char *)&ffltr;
-	}
-	hfs->startScan(attrrec.attrOffset, attrrec.attrLen, type, fltr, op);
+    while (relScan.scanNext(relRID) == OK) {
+        //we have match. delete the tuple
+        status = relScan.deleteRecord();
+        if (status != OK) { return status; }
+        resultTupCnt++;
+    }
 
-	Record rec;
-	RID rid;
-	while (!(status = hfs->scanNext(rid)))
-	{
-		status = hfs->deleteRecord();
-		if (status)
-		{
-			return status;
-		}
-	}
-	if (status == FILEEOF)
-	{
-		status = OK;
-	}
-	hfs->endScan();
-	return status;
+    printf("deleted %d result tuples \n", resultTupCnt);
+
+    //if reached tuples deleted with no issues
+    return OK;
 }
