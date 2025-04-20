@@ -28,47 +28,32 @@ const Status QU_Select(const string &result,
 	// Qu_Select sets up things and then calls ScanSelect to do the actual work
 	cout << "Doing QU_Select " << endl;
 
-	Status status = OK;
-	
-	// Create array of AttrDesc for the projection attributes
+	Status status;
 	AttrDesc *projAttrs = new AttrDesc[projCnt];
-	
-	// Calculate total length of the result record
+	if (status)
+	{
+		return status;
+	}
 	int total = 0;
 	for (int i = 0; i < projCnt; i++)
 	{
-		status = attrCat->getInfo(projNames[i].relName, projNames[i].attrName, projAttrs[i]);
-		if (status != OK)
+		attrInfo obj = projNames[i];
+		status = attrCat->getInfo(obj.relName, obj.attrName, projAttrs[i]);
+		if (status)
 		{
-			delete[] projAttrs;
 			return status;
 		}
 		total += projAttrs[i].attrLen;
 	}
 
-	// Handle the selection attribute if it exists
-	AttrDesc *slctAttr = NULL;
-	if (attr != NULL)
+	AttrDesc *slctAttr = new AttrDesc;
+	status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
+	if (status)
 	{
-		slctAttr = new AttrDesc;
-		status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
-		if (status != OK)
-		{
-			delete[] projAttrs;
-			delete slctAttr;
-			return status;
-		}
+		return status;
 	}
 
-	// Call ScanSelect to perform the actual selection and projection
-	status = ScanSelect(result, projCnt, projAttrs, slctAttr, op, attrValue, total);
-	
-	// Clean up
-	delete[] projAttrs;
-	if (slctAttr != NULL)
-		delete slctAttr;
-		
-	return status;
+	return ScanSelect(result, projCnt, projAttrs, slctAttr, op, attrValue, total);
 }
 
 const Status ScanSelect(const string &result,
@@ -84,7 +69,8 @@ const Status ScanSelect(const string &result,
 	cout << "Doing HeapFileScan Selection using ScanSelect()" << endl;
 	Status status;
 	HeapFileScan *hfs = new HeapFileScan(attrDesc->relName, status);
-	if (status != OK) {
+	if (status)
+	{
 		return status;
 	}
 	float ffltr;
@@ -92,40 +78,40 @@ const Status ScanSelect(const string &result,
 	char *fltr;
 	fltr = (char *)filter;
 	Datatype type = (Datatype)attrDesc->attrType;
-	
-	if (type == INTEGER) {
+	if (type == INTEGER)
+	{
 		ifltr = atoi(filter);
 		fltr = (char *)&ifltr;
 	}
-	else if (type == FLOAT) {
+	else if (type == FLOAT)
+	{
 		ffltr = atof(filter);
 		fltr = (char *)&ffltr;
 	}
 	status = hfs->startScan(attrDesc->attrOffset, attrDesc->attrLen, type, fltr, op);
-	if (status != OK) {
-		delete hfs;
+	if (status)
+	{
 		return status;
 	}
 	InsertFileScan *ifs = new InsertFileScan(result, status);
-	if (status != OK) {
-		delete hfs; //CHECK
+	if (status)
+	{
 		return status;
 	}
 
 	RID rid;
 	Record rec;
 	char *buf = new char[reclen];
-
-	while ((status = hfs->scanNext(rid)) == OK) {
+	while (!(status = hfs->scanNext(rid)))
+	{
 		status = hfs->getRecord(rec);
-		if (status != OK) {
-			delete[] buf;
-			delete hfs;
-			delete ifs;
+		if (status)
+		{
 			return status;
 		}
 		int offset = 0;
-		for (int i = 0; i < projCnt; i++) {
+		for (int i = 0; i < projCnt; i++)
+		{
 			memcpy(buf + offset,
 				   (char *)rec.data + projNames[i].attrOffset,
 				   projNames[i].attrLen);
@@ -136,20 +122,16 @@ const Status ScanSelect(const string &result,
 		rec.length = reclen;
 
 		status = ifs->insertRecord(rec, rid);
-		if (status != OK) {
-			delete[] buf;
-			delete hfs;
-			delete ifs;
+		if (status)
+		{
 			return status;
 		}
 	}
+	if (status == FILEEOF)
+	{
+		status = OK;
+	}
 
-	// Clean up
-	delete[] buf;
-	delete ifs;
 	hfs->endScan();
-	delete hfs;
-
-	// Only convert FILEEOF to OK at the end
-	return (status == FILEEOF) ? OK : status;
+	return status;
 }
