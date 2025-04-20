@@ -28,41 +28,58 @@ const Status QU_Select(const string &result,
 	// Qu_Select sets up things and then calls ScanSelect to do the actual work
 	cout << "Doing QU_Select " << endl;
 
-	Status status = OK;  // Initialize status
+	Status status = OK;
+	
+	// Create array of AttrDesc for the projection attributes
 	AttrDesc *projAttrs = new AttrDesc[projCnt];
-	if (status)
-	{
-		return status;
-	}
+	
+	// Calculate total length of the result record
 	int total = 0;
 	for (int i = 0; i < projCnt; i++)
 	{
-		attrInfo obj = projNames[i];
-		status = attrCat->getInfo(obj.relName, obj.attrName, projAttrs[i]);
-		if (status)
+		status = attrCat->getInfo(projNames[i].relName, projNames[i].attrName, projAttrs[i]);
+		if (status != OK)
 		{
+			delete[] projAttrs;
 			return status;
 		}
 		total += projAttrs[i].attrLen;
 	}
 
-	AttrDesc *slctAttr = new AttrDesc;
-	status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
-	if (status)
+	// Handle the selection attribute if it exists
+	AttrDesc *slctAttr = NULL;
+	if (attr != NULL)
 	{
-		return status;
+		slctAttr = new AttrDesc;
+		status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
+		if (status != OK)
+		{
+			delete[] projAttrs;
+			delete slctAttr;
+			return status;
+		}
 	}
 
-	return ScanSelect(result, projCnt, projAttrs, slctAttr, op, attrValue, total);
+	// Call ScanSelect to perform the actual selection and projection
+	status = ScanSelect(result, projCnt, projAttrs, slctAttr, op, attrValue, total);
+	
+	// Clean up
+	delete[] projAttrs;
+	if (slctAttr != NULL)
+		delete slctAttr;
+		
+	return status;
 }
 
 const Status ScanSelect(const string &result,
-					   const int projCnt,
-					   const AttrDesc projNames[],
-					   const AttrDesc *attrDesc,
-					   const Operator op,
-					   const char *filter,
-					   const int reclen)
+#include "stdio.h"
+#include "stdlib.h"
+						const int projCnt,
+						const AttrDesc projNames[],
+						const AttrDesc *attrDesc,
+						const Operator op,
+						const char *filter,
+						const int reclen)
 {
 	cout << "Doing HeapFileScan Selection using ScanSelect()" << endl;
 	Status status;
@@ -70,43 +87,28 @@ const Status ScanSelect(const string &result,
 	if (status != OK) {
 		return status;
 	}
-
-	// Allocate these on heap to ensure they stay valid
-	float* ffltr = nullptr;
-	int* ifltr = nullptr;
-	const char* fltr = nullptr;
-	
+	float ffltr;
+	int ifltr;
+	char *fltr;
+	fltr = (char *)filter;
 	Datatype type = (Datatype)attrDesc->attrType;
 	
-	if (filter != nullptr) {
-		switch(type) {
-			case INTEGER:
-				ifltr = new int(atoi(filter));
-				fltr = (char*)ifltr;
-				break;
-			case FLOAT:
-				ffltr = new float(atof(filter));
-				fltr = (char*)ffltr;
-				break;
-			case STRING:
-				fltr = filter;  // For string type, use the original filter
-				break;
-		}
+	if (type == INTEGER) {
+		ifltr = atoi(filter);
+		fltr = (char *)&ifltr;
 	}
-
+	else if (type == FLOAT) {
+		ffltr = atof(filter);
+		fltr = (char *)&ffltr;
+	}
 	status = hfs->startScan(attrDesc->attrOffset, attrDesc->attrLen, type, fltr, op);
 	if (status != OK) {
-		delete ffltr;
-		delete ifltr;
 		delete hfs;
 		return status;
 	}
-
 	InsertFileScan *ifs = new InsertFileScan(result, status);
 	if (status != OK) {
-		delete ffltr;
-		delete ifltr;
-		delete hfs;
+		delete hfs; //CHECK
 		return status;
 	}
 
@@ -116,8 +118,12 @@ const Status ScanSelect(const string &result,
 
 	while ((status = hfs->scanNext(rid)) == OK) {
 		status = hfs->getRecord(rec);
-		if (status != OK) break;
-
+		if (status != OK) {
+			delete[] buf;
+			delete hfs;
+			delete ifs;
+			return status;
+		}
 		int offset = 0;
 		for (int i = 0; i < projCnt; i++) {
 			memcpy(buf + offset,
@@ -130,16 +136,20 @@ const Status ScanSelect(const string &result,
 		rec.length = reclen;
 
 		status = ifs->insertRecord(rec, rid);
-		if (status != OK) break;
+		if (status != OK) {
+			delete[] buf;
+			delete hfs;
+			delete ifs;
+			return status;
+		}
 	}
 
 	// Clean up
 	delete[] buf;
 	delete ifs;
-	delete ffltr;
-	delete ifltr;
 	hfs->endScan();
 	delete hfs;
 
+	// Only convert FILEEOF to OK at the end
 	return (status == FILEEOF) ? OK : status;
 }
