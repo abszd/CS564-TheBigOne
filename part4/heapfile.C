@@ -351,6 +351,7 @@ const Status HeapFileScan::resetScan()
  */
 const Status HeapFileScan::scanNext(RID &outRid)
 {
+
     Status status = OK;
     RID nextRid;
     Record rec;
@@ -473,11 +474,39 @@ const Status HeapFileScan::scanNext(RID &outRid)
 
             if (matchRec(rec))
             {
+
                 outRid = curRec;
                 return OK;
             }
+            curRec = tmpRid;
         }
     }
+
+    // If we get here, we need to move to the next page
+    nextPageNo = curPage->getNextPage();
+    
+    // Unpin current page
+    status = bufMgr->unPinPage(filePtr, curPageNo, curDirtyFlag);
+    if (status != OK) return status;
+    
+    // If no next page, we're at the end of the file
+    if (nextPageNo == -1) {
+        curPage = NULL;
+        curPageNo = -1;
+        curDirtyFlag = false;
+        return FILEEOF;
+    }
+    
+    // Read the next page
+    status = bufMgr->readPage(filePtr, nextPageNo, (Page*&)curPage);
+    if (status != OK) return status;
+    
+    curPageNo = nextPageNo;
+    curDirtyFlag = false;
+    curRec = NULLRID;  // Reset curRec for new page
+    
+    // Recursively scan the new page
+    return scanNext(outRid);
 }
 
 // returns pointer to the current record.  page is left pinned
