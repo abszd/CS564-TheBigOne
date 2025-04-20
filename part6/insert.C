@@ -35,13 +35,13 @@ const Status QU_Insert(const string &relation,
 	for (int i = 0; i < relcnt; i++)
 	{
 		bool found = false;
-		for (int j = i + 1; j < attrCnt; j++)
+		for (int j = 0; j < attrCnt; j++)
 		{
 			if (attrList[j].attrValue == NULL)
 			{
 				return ATTRNOTFOUND;
 			}
-			if (!strcmp(rels[i].attrName, attrList[i].attrName)) // if names are the same
+			if (!strcmp(rels[i].attrName, attrList[j].attrName)) // if names are the same
 			{
 				memcpy(buf + rels[i].attrOffset,
 					   attrList[j].attrValue,
