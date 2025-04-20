@@ -69,8 +69,7 @@ const Status ScanSelect(const string &result,
 	cout << "Doing HeapFileScan Selection using ScanSelect()" << endl;
 	Status status;
 	HeapFileScan *hfs = new HeapFileScan(attrDesc->relName, status);
-	if (status)
-	{
+	if (status != OK) {
 		return status;
 	}
 	float ffltr;
@@ -78,40 +77,40 @@ const Status ScanSelect(const string &result,
 	char *fltr;
 	fltr = (char *)filter;
 	Datatype type = (Datatype)attrDesc->attrType;
-	if (type == INTEGER)
-	{
+	
+	if (type == INTEGER) {
 		ifltr = atoi(filter);
 		fltr = (char *)&ifltr;
 	}
-	else if (type == FLOAT)
-	{
+	else if (type == FLOAT) {
 		ffltr = atof(filter);
 		fltr = (char *)&ffltr;
 	}
 	status = hfs->startScan(attrDesc->attrOffset, attrDesc->attrLen, type, fltr, op);
-	if (status)
-	{
+	if (status != OK) {
+		delete hfs;
 		return status;
 	}
 	InsertFileScan *ifs = new InsertFileScan(result, status);
-	if (status)
-	{
+	if (status != OK) {
+		delete hfs; //CHECK
 		return status;
 	}
 
 	RID rid;
 	Record rec;
 	char *buf = new char[reclen];
-	while (!(status = hfs->scanNext(rid)))
-	{
+
+	while ((status = hfs->scanNext(rid)) == OK) {
 		status = hfs->getRecord(rec);
-		if (status)
-		{
+		if (status != OK) {
+			delete[] buf;
+			delete hfs;
+			delete ifs;
 			return status;
 		}
 		int offset = 0;
-		for (int i = 0; i < projCnt; i++)
-		{
+		for (int i = 0; i < projCnt; i++) {
 			memcpy(buf + offset,
 				   (char *)rec.data + projNames[i].attrOffset,
 				   projNames[i].attrLen);
@@ -122,16 +121,20 @@ const Status ScanSelect(const string &result,
 		rec.length = reclen;
 
 		status = ifs->insertRecord(rec, rid);
-		if (status)
-		{
+		if (status != OK) {
+			delete[] buf;
+			delete hfs;
+			delete ifs;
 			return status;
 		}
 	}
-	if (status == FILEEOF)
-	{
-		status = OK;
-	}
 
+	// Clean up
+	delete[] buf;
+	delete ifs;
 	hfs->endScan();
-	return status;
+	delete hfs;
+
+	// Only convert FILEEOF to OK at the end
+	return (status == FILEEOF) ? OK : status;
 }
