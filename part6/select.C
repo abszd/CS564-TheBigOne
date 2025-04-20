@@ -28,7 +28,7 @@ const Status QU_Select(const string &result,
 	// Qu_Select sets up things and then calls ScanSelect to do the actual work
 	cout << "Doing QU_Select " << endl;
 
-	Status status;
+	Status status = OK;  // Initialize status
 	AttrDesc *projAttrs = new AttrDesc[projCnt];
 	if (status)
 	{
