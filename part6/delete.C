@@ -1,3 +1,4 @@
+// NOT THIS ONE
 #include "catalog.h"
 #include "query.h"
 
@@ -15,47 +16,92 @@ const Status QU_Delete(const string &relation,
 					   const Datatype type,
 					   const char *attrValue)
 {
-	// part 6
 	Status status;
-	AttrDesc attrrec;
+	HeapFileScan *hfs = nullptr;
 
-	HeapFileScan *hfs = new HeapFileScan(relation, status);
-	status = attrCat->getInfo(relation, attrName, attrrec);
-	if (status)
-	{
-		return status;
-	}
-
-	float ffltr;
-	int ifltr;
-	char *fltr;
-	fltr = (char *)attrValue;
-	if (type == INTEGER)
-	{
-		ifltr = atoi(attrValue);
-		fltr = (char *)&ifltr;
-	}
-	else if (type == FLOAT)
-	{
-		ffltr = atof(attrValue);
-		fltr = (char *)&ffltr;
-	}
-	hfs->startScan(attrrec.attrOffset, attrrec.attrLen, type, fltr, op);
-
-	Record rec;
-	RID rid;
-	while (!(status = hfs->scanNext(rid)))
-	{
-		status = hfs->deleteRecord();
-		if (status)
-		{
+	try {
+		// Create heap file scan
+		hfs = new HeapFileScan(relation, status);
+		if (status != OK) {
 			return status;
 		}
+
+		if (attrName.empty()) {
+			// No condition given - scan all records
+			status = hfs->startScan(0, 0, STRING, nullptr, op);
+		} else {
+			// Get attribute info for filtering
+			AttrDesc attrDesc;
+			status = attrCat->getInfo(relation, attrName, attrDesc);
+			if (status != OK) {
+				delete hfs;
+				return status;
+			}
+
+			// Handle type conversion
+			union {
+				int intVal;
+				float floatVal;
+			} convertedValue;
+			void* filterPtr = nullptr;
+
+			switch(type) {
+				case STRING:
+					filterPtr = (void*)attrValue;
+					break;
+				case INTEGER:
+					if (attrValue) {
+						convertedValue.intVal = atoi(attrValue);
+						filterPtr = &convertedValue.intVal;
+					}
+					break;
+				case FLOAT:
+					if (attrValue) {
+						convertedValue.floatVal = atof(attrValue);
+						filterPtr = &convertedValue.floatVal;
+					}
+					break;
+				default:
+					delete hfs;
+					return ATTRTYPEMISMATCH;
+			}
+
+			status = hfs->startScan(attrDesc.attrOffset,
+								  attrDesc.attrLen,
+								  type,
+								  (char*)filterPtr,
+								  op);
+		}
+
+		if (status != OK) {
+			delete hfs;
+			return status;
+		}
+
+		// Delete matching records
+		RID rid;
+		while ((status = hfs->scanNext(rid)) == OK) {
+			status = hfs->deleteRecord();
+			if (status != OK) {
+				break;
+			}
+		}
+
+		// Convert FILEEOF to OK
+		if (status == FILEEOF) {
+			status = OK;
+		}
+
+		// Cleanup
+		hfs->endScan();
+		delete hfs;
+		return status;
+
+	} catch (...) {
+		if (hfs) {
+			hfs->endScan();
+			delete hfs;
+		}
+		throw;
 	}
-	if (status == FILEEOF)
-	{
-		status = OK;
-	}
-	hfs->endScan();
-	return status;
 }
