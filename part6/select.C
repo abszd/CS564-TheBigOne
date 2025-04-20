@@ -29,12 +29,9 @@ const Status QU_Select(const string &result,
 	cout << "Doing QU_Select " << endl;
 
 	Status status;
-	AttrDesc *projAttrs = new AttrDesc[projCnt];
-	if (status)
-	{
-		return status;
-	}
+	AttrDesc projAttrs[projCnt];
 	int total = 0;
+
 	for (int i = 0; i < projCnt; i++)
 	{
 		attrInfo obj = projNames[i];
@@ -47,10 +44,17 @@ const Status QU_Select(const string &result,
 	}
 
 	AttrDesc *slctAttr = new AttrDesc;
-	status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
-	if (status)
+	if (attr != NULL)
 	{
-		return status;
+		status = attrCat->getInfo(attr->relName, attr->attrName, *slctAttr);
+		if (status)
+		{
+			return status;
+		}
+	}
+	else
+	{
+		slctAttr = NULL;
 	}
 
 	return ScanSelect(result, projCnt, projAttrs, slctAttr, op, attrValue, total);
@@ -68,32 +72,32 @@ const Status ScanSelect(const string &result,
 {
 	cout << "Doing HeapFileScan Selection using ScanSelect()" << endl;
 	Status status;
-	HeapFileScan *hfs = new HeapFileScan(attrDesc->relName, status);
-	if (status)
+	HeapFileScan hfs(projNames[0].relName, status);
+
+	if (attrDesc == NULL)
 	{
-		return status;
+		status = hfs.startScan(0, 0, STRING, NULL, EQ);
 	}
-	float ffltr;
-	int ifltr;
-	char *fltr;
-	fltr = (char *)filter;
-	Datatype type = (Datatype)attrDesc->attrType;
-	if (type == INTEGER)
+	else
 	{
-		ifltr = atoi(filter);
-		fltr = (char *)&ifltr;
+		Datatype type = (Datatype)attrDesc->attrType;
+		char *fltr = (char *)filter;
+		int ifltr;
+		float ffltr;
+		if (type == INTEGER)
+		{
+			ifltr = atoi(filter);
+			fltr = (char *)&ifltr;
+		}
+		else if (type == FLOAT)
+		{
+			ffltr = atof(filter);
+			fltr = (char *)&ffltr;
+		}
+		status = hfs.startScan(attrDesc->attrOffset, attrDesc->attrLen,
+							   type, fltr, op);
 	}
-	else if (type == FLOAT)
-	{
-		ffltr = atof(filter);
-		fltr = (char *)&ffltr;
-	}
-	status = hfs->startScan(attrDesc->attrOffset, attrDesc->attrLen, type, fltr, op);
-	if (status)
-	{
-		return status;
-	}
-	InsertFileScan *ifs = new InsertFileScan(result, status);
+	InsertFileScan ifs(result, status);
 	if (status)
 	{
 		return status;
@@ -102,9 +106,9 @@ const Status ScanSelect(const string &result,
 	RID rid;
 	Record rec;
 	char *buf = new char[reclen];
-	while (!(status = hfs->scanNext(rid)))
+	while (hfs.scanNext(rid) == OK)
 	{
-		status = hfs->getRecord(rec);
+		status = hfs.getRecord(rec);
 		if (status)
 		{
 			return status;
@@ -121,7 +125,7 @@ const Status ScanSelect(const string &result,
 		rec.data = buf;
 		rec.length = reclen;
 
-		status = ifs->insertRecord(rec, rid);
+		status = ifs.insertRecord(rec, rid);
 		if (status)
 		{
 			return status;
@@ -132,6 +136,6 @@ const Status ScanSelect(const string &result,
 		status = OK;
 	}
 
-	hfs->endScan();
+	hfs.endScan();
 	return status;
 }

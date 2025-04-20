@@ -16,7 +16,7 @@ const Status QU_Insert(const string &relation,
 	// part 6
 	Status status;
 	int relcnt;
-	AttrDesc *rels = new AttrDesc[attrCnt];
+	AttrDesc *rels;
 	status = attrCat->getRelInfo(relation, relcnt, rels);
 	if (status)
 	{
@@ -26,25 +26,41 @@ const Status QU_Insert(const string &relation,
 	{
 		return ATTRTOOLONG;
 	}
-	int reccnt = 0;
-	for (int i = 0; i < relcnt; i++)
+
+	int reclen = 0;
+	for (int i = 0; i < attrCnt; i++)
 	{
-		reccnt += rels[i].attrLen;
+		reclen += rels[i].attrLen;
 	}
-	char *buf = new char[reccnt];
+
+	char *buf = new char[reclen];
 	for (int i = 0; i < relcnt; i++)
 	{
 		bool found = false;
-		for (int j = i + 1; j < attrCnt; j++)
+		for (int j = 0; j < attrCnt; j++)
 		{
 			if (attrList[j].attrValue == NULL)
 			{
 				return ATTRNOTFOUND;
 			}
-			if (!strcmp(rels[i].attrName, attrList[i].attrName)) // if names are the same
+			if (!strcmp(rels[i].attrName, attrList[j].attrName)) // if names are the same
 			{
+				Datatype type = (Datatype)attrList[j].attrType;
+				char *val = (char *)attrList[j].attrValue;
+				int ival;
+				float fval;
+				if (type == INTEGER)
+				{
+					ival = atoi(val);
+					val = (char *)&ival;
+				}
+				else if (type == FLOAT)
+				{
+					fval = atof(val);
+					val = (char *)&fval;
+				}
 				memcpy(buf + rels[i].attrOffset,
-					   attrList[j].attrValue,
+					   val,
 					   rels[i].attrLen);
 				found = true;
 				break;
@@ -55,7 +71,8 @@ const Status QU_Insert(const string &relation,
 			return ATTRNOTFOUND;
 		}
 	}
-	InsertFileScan *ifs = new InsertFileScan(relation, status);
+
+	InsertFileScan ifs(relation, status);
 	if (status)
 	{
 		return status;
@@ -63,8 +80,7 @@ const Status QU_Insert(const string &relation,
 
 	Record rec;
 	rec.data = buf;
-	rec.length = reccnt;
-
+	rec.length = reclen;
 	RID rid;
-	return ifs->insertRecord(rec, rid);
+	return ifs.insertRecord(rec, rid);
 }

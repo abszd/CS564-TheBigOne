@@ -17,36 +17,38 @@ const Status QU_Delete(const string &relation,
 {
 	// part 6
 	Status status;
-	AttrDesc attrrec;
+	HeapFileScan hfs(relation, status);
 
-	HeapFileScan *hfs = new HeapFileScan(relation, status);
-	status = attrCat->getInfo(relation, attrName, attrrec);
-	if (status)
+	if (attrName.empty())
 	{
-		return status;
+		status = hfs.startScan(0, 0, STRING, NULL, EQ);
+	}
+	else
+	{
+		AttrDesc attrrec;
+		status = attrCat->getInfo(relation, attrName, attrrec);
+
+		char *fltr = (char *)attrValue;
+		int ifltr;
+		float ffltr;
+		if (type == INTEGER)
+		{
+			ifltr = atoi(attrValue);
+			fltr = (char *)&ifltr;
+		}
+		else if (type == FLOAT)
+		{
+			ffltr = atof(attrValue);
+			fltr = (char *)&ffltr;
+		}
+		status = hfs.startScan(attrrec.attrOffset, attrrec.attrLen,
+							   type, fltr, op);
 	}
 
-	float ffltr;
-	int ifltr;
-	char *fltr;
-	fltr = (char *)attrValue;
-	if (type == INTEGER)
-	{
-		ifltr = atoi(attrValue);
-		fltr = (char *)&ifltr;
-	}
-	else if (type == FLOAT)
-	{
-		ffltr = atof(attrValue);
-		fltr = (char *)&ffltr;
-	}
-	hfs->startScan(attrrec.attrOffset, attrrec.attrLen, type, fltr, op);
-
-	Record rec;
 	RID rid;
-	while (!(status = hfs->scanNext(rid)))
+	while (!(status = hfs.scanNext(rid)))
 	{
-		status = hfs->deleteRecord();
+		status = hfs.deleteRecord();
 		if (status)
 		{
 			return status;
@@ -56,6 +58,6 @@ const Status QU_Delete(const string &relation,
 	{
 		status = OK;
 	}
-	hfs->endScan();
+	hfs.endScan();
 	return status;
 }
