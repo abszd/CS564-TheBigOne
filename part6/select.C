@@ -57,14 +57,12 @@ const Status QU_Select(const string &result,
 }
 
 const Status ScanSelect(const string &result,
-#include "stdio.h"
-#include "stdlib.h"
-						const int projCnt,
-						const AttrDesc projNames[],
-						const AttrDesc *attrDesc,
-						const Operator op,
-						const char *filter,
-						const int reclen)
+					   const int projCnt,
+					   const AttrDesc projNames[],
+					   const AttrDesc *attrDesc,
+					   const Operator op,
+					   const char *filter,
+					   const int reclen)
 {
 	cout << "Doing HeapFileScan Selection using ScanSelect()" << endl;
 	Status status;
@@ -72,28 +70,43 @@ const Status ScanSelect(const string &result,
 	if (status != OK) {
 		return status;
 	}
-	float ffltr;
-	int ifltr;
-	char *fltr;
-	fltr = (char *)filter;
+
+	// Allocate these on heap to ensure they stay valid
+	float* ffltr = nullptr;
+	int* ifltr = nullptr;
+	const char* fltr = nullptr;
+	
 	Datatype type = (Datatype)attrDesc->attrType;
 	
-	if (type == INTEGER) {
-		ifltr = atoi(filter);
-		fltr = (char *)&ifltr;
+	if (filter != nullptr) {
+		switch(type) {
+			case INTEGER:
+				ifltr = new int(atoi(filter));
+				fltr = (char*)ifltr;
+				break;
+			case FLOAT:
+				ffltr = new float(atof(filter));
+				fltr = (char*)ffltr;
+				break;
+			case STRING:
+				fltr = filter;  // For string type, use the original filter
+				break;
+		}
 	}
-	else if (type == FLOAT) {
-		ffltr = atof(filter);
-		fltr = (char *)&ffltr;
-	}
+
 	status = hfs->startScan(attrDesc->attrOffset, attrDesc->attrLen, type, fltr, op);
 	if (status != OK) {
+		delete ffltr;
+		delete ifltr;
 		delete hfs;
 		return status;
 	}
+
 	InsertFileScan *ifs = new InsertFileScan(result, status);
 	if (status != OK) {
-		delete hfs; //CHECK
+		delete ffltr;
+		delete ifltr;
+		delete hfs;
 		return status;
 	}
 
@@ -103,12 +116,8 @@ const Status ScanSelect(const string &result,
 
 	while ((status = hfs->scanNext(rid)) == OK) {
 		status = hfs->getRecord(rec);
-		if (status != OK) {
-			delete[] buf;
-			delete hfs;
-			delete ifs;
-			return status;
-		}
+		if (status != OK) break;
+
 		int offset = 0;
 		for (int i = 0; i < projCnt; i++) {
 			memcpy(buf + offset,
@@ -121,20 +130,16 @@ const Status ScanSelect(const string &result,
 		rec.length = reclen;
 
 		status = ifs->insertRecord(rec, rid);
-		if (status != OK) {
-			delete[] buf;
-			delete hfs;
-			delete ifs;
-			return status;
-		}
+		if (status != OK) break;
 	}
 
 	// Clean up
 	delete[] buf;
 	delete ifs;
+	delete ffltr;
+	delete ifltr;
 	hfs->endScan();
 	delete hfs;
 
-	// Only convert FILEEOF to OK at the end
 	return (status == FILEEOF) ? OK : status;
 }
