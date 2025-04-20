@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "buf.C": "cpp",
+        "bufHash.C": "cpp",
+        "dbcreate.C": "cpp",
+        "dbdestroy.C": "cpp",
+        "delete.C": "cpp",
+        "destroy.C": "cpp",
+        "error.C": "cpp",
+        "join.C": "cpp",
+        "select.C": "cpp",
+        "heapfile.C": "cpp",
+        "catalog.C": "cpp",
+        "db.C": "cpp",
+        "joinHT.C": "cpp",
+        "minirel.C": "cpp",
+        "insert.C": "cpp"
+    }
+}

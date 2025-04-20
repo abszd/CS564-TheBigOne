@@ -1,10 +1,17 @@
 {
-  "files.associations": {
-    "buf.C": "cpp",
-    "db.C": "cpp",
-    "testbuf.C": "cpp",
-    "bufHash.C": "cpp",
-    "error.C": "cpp",
-    "page.C": "cpp"
-  }
+    "files.associations": {
+        "buf.C": "cpp",
+        "db.C": "cpp",
+        "testbuf.C": "cpp",
+        "bufHash.C": "cpp",
+        "error.C": "cpp",
+        "page.C": "cpp",
+        "heapfile.C": "cpp",
+        "poals.C": "cpp",
+        "testfile.C": "cpp",
+        "minirel.C": "cpp",
+        "select.C": "cpp",
+        "insert.C": "cpp",
+        "join.C": "cpp"
+    }
 }
