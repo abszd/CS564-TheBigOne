@@ -1,3 +1,6 @@
+// Arian Abbaszadeh - 9083678194
+// Glenn Hadcock - 9085633288
+// Akshaya Somasundaram - 9085417682
 #include "catalog.h"
 #include "query.h"
 
